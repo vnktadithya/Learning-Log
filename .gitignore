@@ -1,5 +1,8 @@
 System Prompts/
 Work on/
 Research Papers/
+venv/
+.vscode/
 
 __pycache__
+Llama-3.2-1B-Instruct-Q4_K_M.gguf

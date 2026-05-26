@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 def parse_action(string: str) -> Optional[Tuple[str, str]]:
     pattern = r'Action:\s*([A-Za-z0-9_]+)\s*\[(.*?)\]'
 
-    match = re.match(pattern, string)
+    match = re.search(pattern, string)
 
     if not match:
         print('Parsing error. LLM output did not match expected output fromat.')
