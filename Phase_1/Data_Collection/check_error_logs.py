@@ -16,7 +16,7 @@ def contains_stack_trace_or_log(text): #specifically for python
     if re.search(error_pattern, text):
         return True
 
-    # 3. Check for typical log patterns (e.g., 2026-05-28 12:00:00, or [WARNING], or INFO:)
+    # 3. Check for typical log patterns (e.g. [WARNING], or INFO:)
     log_pattern = r"(?:\d{4}-\d{2}-\d{2}|\b(?:DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|FATAL)\b[:\]\s])"
     if re.search(log_pattern, text, re.IGNORECASE):
         return True

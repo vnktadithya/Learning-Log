@@ -22,6 +22,6 @@ def append_to_jsonl(filename: str, raw_log: str, rca_json: dict):
         ]
     }
     
-    # 'a' mode appends to the file without overwriting existing data.
+    # append data to file
     with open(filename, 'a', encoding='utf-8') as f:
         f.write(json.dumps(finetune_row) + "\n")
