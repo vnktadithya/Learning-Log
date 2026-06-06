@@ -4,6 +4,12 @@ def contains_stack_trace_or_log(text): #specifically for python
     if not text:
         return False
 
+    # reject the mocked traces
+    synthetic_patterns = [r"/path/to/", r"example\.com", r"line XXX", r"line YYY", r"your_username"]
+    for pattern in synthetic_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return False
+
     # 1. Check for standard Python Tracebacks
     if "Traceback (most recent call last):" in text:
         return True
