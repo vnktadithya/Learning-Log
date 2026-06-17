@@ -1,7 +1,7 @@
 System Prompts/
 Work on/
 Research Papers/
-venv/
+.venv/
 .vscode/
 
 __pycache__
