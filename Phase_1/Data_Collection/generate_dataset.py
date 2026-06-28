@@ -2,9 +2,9 @@ import requests
 import re
 import os
 import time
-from .LLM_Generator import generate_synthetic_telemetry
-from .check_error_logs import contains_stack_trace_or_log
-from .add_to_jsonl import append_to_jsonl
+from LLM_Generator import generate_synthetic_telemetry
+from check_error_logs import contains_stack_trace_or_log
+from add_to_jsonl import append_to_jsonl
 
 GITHUB_TOKEN = os.getenv("GitHub_PAT")
 if not GITHUB_TOKEN:
