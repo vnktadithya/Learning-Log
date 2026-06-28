@@ -1,5 +1,4 @@
 import os
-import requests
 import json
 import time
 from dotenv import load_dotenv
