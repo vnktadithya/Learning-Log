@@ -138,7 +138,7 @@ def fetch_real_rca_data(target_count):
                     try:
                         append_to_jsonl(
                             'Phase_1/Data_Collection/Log_telemetry_dataset.jsonl', 
-                            log_telemetry['raw_log'], 
+                            log_telemetry['raw_log'],
                             log_telemetry['rca_schema']
                         )
                         collected_examples += 1
