@@ -1,5 +1,5 @@
 import torch
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, TrainingArguments, DataCollatorForLanguageModeling
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, TrainingArguments, DataCollatorForLanguageModeling, Trainer
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 from datasets import load_dataset
 from input_tokenizer import tokenize_function
@@ -38,11 +38,15 @@ dataset = dataset.map(lambda batch: tokenize_function(batch, tokenizer), batched
 
 training_args = TrainingArguments(output_dir="./results",
                                   per_device_train_batch_size = 1,  # 1 sequence per forward pass
-                                  gradient_accumulation_steps = 4,  # 
+                                  gradient_accumulation_steps = 4,  # accumulate the gradients for 4 steps before updating the weights
                                   optim = 'paged_adamw_32bit',      # prevents memory spikes during optimizer state updates
                                   learning_rate = 2e-4,             
                                   bf16 = True,                      # match the compute data type
                                   max_steps = 100,
                                   )
 
-data_collator = DataCollatorForLanguageModeling(tokenizer, mlm = False) # data collator is used to pad all the sequences to the maximum length sequence of that specific batch
+# data collator is used to pad all the sequences to the maximum length sequence of that specific batch
+data_collator = DataCollatorForLanguageModeling(tokenizer, mlm = False) 
+
+trainer = Trainer(model = peft_model, train_dataset = dataset, args = training_args, data_collator = data_collator)
+trainer.train()
