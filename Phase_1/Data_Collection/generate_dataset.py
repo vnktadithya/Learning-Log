@@ -5,6 +5,8 @@ import time
 from LLM_Generator import generate_synthetic_telemetry
 from check_error_logs import contains_stack_trace_or_log
 from add_to_jsonl import append_to_jsonl
+from train_test_split import train_test_split
+from backoff_utils import compute_backoff
 
 GITHUB_TOKEN = os.getenv("GitHub_PAT")
 if not GITHUB_TOKEN:
@@ -35,8 +37,7 @@ TARGET_REPOS = [        # Repositories written in python
 ]
 
 def fetch_real_rca_data(target_count):
-    collected_examples = 0
-    page = 1
+    collected_examples = 0    
     
     # We only want merged PRs with the 'bug' label
     for repo in TARGET_REPOS:
@@ -44,6 +45,7 @@ def fetch_real_rca_data(target_count):
             break
 
         page = 1
+        retry_count = 0
 
         params = {
                 "q": f'repo:{repo} is:pr is:merged',
@@ -65,13 +67,20 @@ def fetch_real_rca_data(target_count):
                 continue
             
             if pr_response.status_code != 200:
-                print(f"GitHub API Error: {pr_response.text}")
-                if pr_response.status_code == 403: # Rate limit hit
-                    print("Rate limit hit. Sleeping for 60 seconds...")
-                    time.sleep(60)
+                if pr_response.status_code in (403, 429):
+                    retry_after = pr_response.headers.get("Retry-After")
+                    wait = float(retry_after) if retry_after else compute_backoff(retry_count)
+                    print(f"Rate limited (status {pr_response.status_code}). Sleeping {wait:.1f}s.")
+                    time.sleep(wait)
+                    retry_count += 1
+                    if retry_count > 6:
+                        print("Too many retries on this page — moving on.")
+                        break
                     continue
+                print(f"GitHub API Error: {pr_response.text}")
                 break
                 
+            retry_count = 0
             response_data = pr_response.json()
             prs = response_data.get("items", [])
 
@@ -89,13 +98,14 @@ def fetch_real_rca_data(target_count):
                 body += pr.get("body") or ""
                 
                 # Look for the exact issue link syntax (e.g., Fixes #12345, Resolves #12345)
-                matches = set(re.finditer(r"(?:[Ff]ixes|[Rr]esolves|[Cc]loses|[Ii]ssue)\s+#(\d+)", body))
-                if not matches:
+                pattern = r"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)"
+                matches = re.finditer(pattern, body, re.IGNORECASE)
+                issue_numbers = {m.group(1) for m in matches}
+                if not issue_numbers:
                     print('No matches')
                     continue
 
-                for match in matches:
-                    issue_number = match.group(1)
+                for issue_number in issue_numbers:
                     
                     # Fetch the original issue
                     issue_url = f"https://api.github.com/repos/{repo}/issues/{issue_number}"
@@ -111,6 +121,10 @@ def fetch_real_rca_data(target_count):
                         continue
                         
                     issue_data = issue_response.json()
+                    if "pull_request" in issue_data:
+                        print(f"#{issue_number} is a PR, not an issue. Skipping.")
+                        continue
+
                     issue_text = issue_data.get("body") or ""
                     body += f'#{issue_number}:\n{issue_text}\n'
 
@@ -134,10 +148,11 @@ def fetch_real_rca_data(target_count):
                         print(f"LLM rejected PR {pr.get('number', 'Unknown')} due to insufficient context. Skipping.")
                         continue
                     
-                    #append data to log_telemetry file
+                    #append data to respective train or test files
+                    file_name = train_test_split(issue_url)
                     try:
                         append_to_jsonl(
-                            'Phase_1/Data_Collection/Log_telemetry_dataset.jsonl', 
+                            file_name, 
                             log_telemetry['raw_log'],
                             log_telemetry['rca_schema']
                         )
