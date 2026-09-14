@@ -2,8 +2,9 @@ import os
 import json
 import time
 from dotenv import load_dotenv
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+from google import genai
+from google.genai import types
+from backoff_utils import compute_backoff
 
 load_dotenv()
 
@@ -12,8 +13,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY is missing. Add it to your .env file.")
 
-# Configure the SDK
-genai.configure(api_key=GEMINI_API_KEY)
+# Initialize the Google GenAI Client
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def normalize_keys(data: dict) -> dict:
     """
@@ -71,24 +72,21 @@ langchain.schema.output_parser.OutputParserException: Failed to parse Pydantic o
 """
     user_prompt = f"PULL REQUEST AND RELATED ISSUES:\n{body}\n\nGenerate the JSON object containing the 'raw_log' and the 'rca_schema'."
 
-    # Initialize the model with the system prompt natively
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=system_prompt
-    )
-
-    # Force strict JSON output
-    generation_config = GenerationConfig(
+    # Build the structural configuratio
+    config = types.GenerateContentConfig(
         temperature=0.1,
         response_mime_type="application/json",
+        system_instruction=system_prompt
     )
     
     max_retries = 4
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(
-                user_prompt,
-                generation_config=generation_config
+            # Call generation via client models service
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_prompt,
+                config=config
             )
             
             content = response.text
@@ -107,11 +105,16 @@ langchain.schema.output_parser.OutputParserException: Failed to parse Pydantic o
         except Exception as e:
             error_msg = str(e)
             print(f"LLM API Exception on attempt {attempt+1}: {error_msg}")
+
+            # Handle Non-Retryable errors
+            if "API key not valid" in error_msg or "SAFETY" in error_msg or "PERMISSION_DENIED" in error_msg:
+                print(f"Non-retryable error, skipping: {error_msg}")
+                return None
             
             # Handle Google's specific Rate Limit / Quota exceptions (429 / ResourceExhausted)
             if "429" in error_msg or "ResourceExhausted" in error_msg or "quota" in error_msg.lower():
-                sleep_time = 15 * (attempt + 1)
-                print(f"Gemini Rate Limit Hit. Sleeping for {sleep_time} seconds...")
+                sleep_time = compute_backoff(attempt)
+                print(f"Gemini Rate Limit Hit. Sleeping for {sleep_time:.1f}s.")
                 time.sleep(sleep_time)
                 continue
             
