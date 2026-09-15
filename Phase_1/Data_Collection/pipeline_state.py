@@ -5,12 +5,11 @@ from pathlib import Path
 
 def load_state(path="pipeline_state.json") -> dict:
     # Returns the current state. If the file doesn't exist yet, 
-    # an empty file is created and returns an empty skeleton
+    # returns an empty skeleton
     file_path = Path(path)
 
     if file_path.is_file():
         content = file_path.read_text()
-        print(json.loads(content))
         return json.loads(content)
 
     return {"processed_issues": {}}
@@ -25,7 +24,6 @@ def save_state(state: dict, path="pipeline_state.json") -> None:
 
 def is_processed(state: dict, key: str) -> bool:
     # True if this issue key has a terminal decision recorded already
-    print(key in state["processed_issues"])
     return key in state["processed_issues"]
 
 def mark_processed(state: dict, key: str, status: str, raw_log: str = None, split: str = None) -> None:
@@ -41,7 +39,4 @@ def get_accepted_raw_logs(state: dict) -> list[str]:
     for key, value in state["processed_issues"].items():
         if value["status"] == "accepted":
             accepted_raw_logs.append(value["raw_log"])
-    print(accepted_raw_logs)
     return accepted_raw_logs
-
-get_accepted_raw_logs(load_state())
