@@ -8,4 +8,4 @@ def train_test_split(url):
     if hash_int < 10:
         return 'eval_dataset.jsonl'
     else:
-        return 'train_dataset.jsonl'  
+        return 'train_dataset.jsonl'
