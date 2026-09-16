@@ -9,4 +9,7 @@ __init__.py
 Llama-3.2-1B-Instruct-Q4_K_M.gguf
 .env
 Log_telemetry_dataset.jsonl
-output.log
+logs/
+pipeline_state.json
+train_dataset.jsonl
+eval_dataset.jsonl
