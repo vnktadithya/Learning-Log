@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import json
 import time
 from dotenv import load_dotenv
@@ -6,7 +7,15 @@ from google import genai
 from google.genai import types
 from backoff_utils import compute_backoff
 
-load_dotenv()
+
+class QuotaExhaustedError(Exception):
+    """Raised only when every retry failed AND at least one of those
+    failures was specifically a rate-limit/quota error"""
+    pass
+
+base_dir = Path(__file__).resolve().parent.parent.parent
+env_path = base_dir / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
 
 # Ensure API Key is present
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -15,6 +24,7 @@ if not GEMINI_API_KEY:
 
 # Initialize the Google GenAI Client
 client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 
 def normalize_keys(data: dict) -> dict:
     """
@@ -80,11 +90,12 @@ langchain.schema.output_parser.OutputParserException: Failed to parse Pydantic o
     )
     
     max_retries = 4
+    any_attempt_was_quota = False
     for attempt in range(max_retries):
         try:
             # Call generation via client models service
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=user_prompt,
                 config=config
             )
@@ -113,11 +124,15 @@ langchain.schema.output_parser.OutputParserException: Failed to parse Pydantic o
             
             # Handle Google's specific Rate Limit / Quota exceptions (429 / ResourceExhausted)
             if "429" in error_msg or "ResourceExhausted" in error_msg or "quota" in error_msg.lower():
+                any_attempt_was_quota = True
                 sleep_time = compute_backoff(attempt)
                 print(f"Gemini Rate Limit Hit. Sleeping for {sleep_time:.1f}s.")
                 time.sleep(sleep_time)
                 continue
             
             time.sleep(5)
+
+    if any_attempt_was_quota:
+        raise QuotaExhaustedError("All retries exhausted — at least one failure was rate-limit related.")
             
     return None
