@@ -1,10 +1,11 @@
+from google.api import launch_stage_pb2
 import os
 import re
 import json
 import time
 from dotenv import load_dotenv
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -14,7 +15,10 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY is missing. Add it to your .env file.")
 
 # Configure the SDK
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+if not GEMINI_MODEL:
+    raise ValueError("GEMINI_MODEL is missing. Add it to your .env file.")
 
 def convert_to_json(response) -> dict:
     try:
@@ -45,10 +49,10 @@ def evaluate_analysis(input_logs: str, ground_truth: str, model_prediction: str)
 Your job is to evaluate the root cause and the recommended action and produce an output in the strict JSON format with exactly two keys.No preamble. No markdown code blocks. No backticks. No conversational filler.
 	
 OUTPUT FORMAT:
-{
+{{
  "reasoning" : ".....",
  "score" : an integer value
-}
+}}
 
 where:
 1) 'score': rate it on a scale of 5
@@ -61,6 +65,9 @@ Score = 2: Failure. The model identified the correct root cause or the failing s
 Score = 3: Partial success. The model identified the correct failing service but provided a vague or slightly inaccurate trigger mechanism.
 Score = 4: The Prediction correctly identifies the failing_service and general cause, but misses a specific variable name present in the Ground Truth.
 Score = 5: Perfect extraction. The model explicitly identified the exact service, the exact trigger, and hallucinated zero external information, matching the ground truth's technical depth.
+
+CRITICAL SCORING RULE — TECHNICAL IDENTIFIER CROSS-CHECK:
+Before assigning a score, cross-check every specific technical identifier in the PREDICTION (function names, class names, file/module paths, exception types) against the TRACEBACK portion of the INPUT LOGS specifically, and against the GROUND TRUTH. If an identifier genuinely appears in the TRACEBACK (e.g., a function name in a stack frame) or matches the GROUND TRUTH, it is NOT a hallucination, even if the PREDICTION's surrounding causal explanation is vague or partially wrong. Restating or paraphrasing the user_report's own description of the symptom earns NO credit under this rule — it is not evidence the model diagnosed anything, since that information was already given. Reserve "hallucinated" for identifiers, mechanisms, services, or fixes that appear in neither the TRACEBACK nor the GROUND TRUTH. A PREDICTION that names a correct function or exception FOUND IN THE TRACEBACK but explains the mechanism vaguely is a Score 3, not a Score 1 or 2 — but a PREDICTION built only from the user's own problem description, with no traceback-grounded specifics, has earned nothing extra.
 
 EVALUATION CONTEXT:
 **INPUT LOGS** 
@@ -100,25 +107,22 @@ PREDICTION: {{"severity": "HIGH",
     user_prompt = f"INPUT LOGS: {input_logs}\nGROUND TRUTH: {ground_truth}\nMODEL PREDICTION: {model_prediction}\nGenerate the JSON object containing the 'score' and the 'reasoning'."
 
     # Initialize the model with the system prompt
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=system_prompt
-    )
-
-    # Force strict JSON output
-    generation_config = GenerationConfig(
+    config = types.GenerateContentConfig(
         temperature=0.1,
         response_mime_type="application/json",
+        system_instruction=system_prompt
     )
     
     max_retries = 4
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(
-                user_prompt,
-                generation_config=generation_config
+            # Call generation via client models service
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=user_prompt,
+                config=config
             )
-            
+
             content = response.text
             extracted_data = convert_to_json(content)
             normalized_data = normalize_keys(extracted_data)
@@ -126,7 +130,11 @@ PREDICTION: {{"severity": "HIGH",
             if "reasoning" not in normalized_data or "score" not in normalized_data:
                  print(f"Missing required keys in LLM output: {normalized_data.keys()}")
                  return None
-                 
+
+            usage = response.usage_metadata
+            normalized_data["prompt_tokens"] = usage.prompt_token_count
+            normalized_data["output_tokens"] = (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+
             return normalized_data
             
         except json.JSONDecodeError:
