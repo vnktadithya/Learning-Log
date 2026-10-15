@@ -1,5 +1,4 @@
 import numpy as np
-from pairs import TRAIN_PAIRS, TEST_PAIRS
 
 def tokenize(sentence: str)-> list[str]:
     return sentence.lower().split()
@@ -60,18 +59,25 @@ def get_labels(pairs):
 
     return labels
 
-def compute_similarity_scores(pairs, split, vocab):
-    print("split    category    label      baseline cosine")
+def baseline_scores(pairs, vocab)-> list[float]:
     scores = []
 
     for index, row in enumerate(pairs):
         u = BOW_vector(row[0], vocab)
         v = BOW_vector(row[1], vocab)
         cos_sim = cosine_similarity(u, v)
-        print(f"{split}       {row[3]}         {row[2]}       {cos_sim}")
         scores.append(cos_sim)
 
     return scores
+
+
+def print_score_table(pairs, split, baseline, untrained) -> None:
+    print("split    category    label      baseline cosine     untrained encoder cosine")
+    scores = []
+
+    for row, baseline_score, untrained_score in zip(pairs, baseline, untrained):
+        print(f"{split}       {row[3]}         {row[2]}       {baseline_score}         {untrained_score}")
+
 
 def auc(scores, labels):
     positive_pairs, negative_pairs = [], []
@@ -95,18 +101,3 @@ def auc(scores, labels):
 
     return positive_score / (positive_score + negative_score)
 
-vocab = build_vocab(TRAIN_PAIRS)
-# For Training pairs
-train_scores = compute_similarity_scores(TRAIN_PAIRS, 'Train', vocab)
-train_labels = get_labels(TRAIN_PAIRS)
-print("----------------------------------------------------------")
-print(f"Training pairs AUC score: {auc(train_scores, train_labels)}")
-print("----------------------------------------------------------")
-
-
-# For Test pairs
-test_scores = compute_similarity_scores(TEST_PAIRS, 'Test', vocab)
-test_labels = get_labels(TEST_PAIRS)
-print("----------------------------------------------------------")
-print(f"Testing pairs AUC score: {auc(test_scores, test_labels)}")
-print("----------------------------------------------------------")
