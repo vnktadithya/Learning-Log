@@ -71,12 +71,11 @@ def baseline_scores(pairs, vocab)-> list[float]:
     return scores
 
 
-def print_score_table(pairs, split, baseline, untrained) -> None:
-    print("split    category    label      baseline cosine     untrained encoder cosine")
-    scores = []
+def print_score_table(pairs, split, baseline, untrained, trained) -> None:
+    print("split    category    label      baseline cosine          untrained encoder cosine            trained encoder cosine")
 
-    for row, baseline_score, untrained_score in zip(pairs, baseline, untrained):
-        print(f"{split}       {row[3]}         {row[2]}       {baseline_score}         {untrained_score}")
+    for row, baseline_score, untrained_score, trained_score in zip(pairs, baseline, untrained, trained):
+        print(f"{split}       {row[3]}         {row[2]}       {baseline_score}              {untrained_score}               {trained_score}")
 
 
 def auc(scores, labels):
