@@ -34,6 +34,7 @@ def encoder_scores(pairs, encoder, vocab) -> list[float]:
 
 if __name__ == '__main__':
     input_sentence = 'valueerror because split on equals had no maxsplit so values with equals broke unpacking'
+    input_length = len(input_sentence.split())
     vocab = build_vocab(TRAIN_PAIRS)
     ids = torch.tensor(to_ids(input_sentence, vocab), dtype=torch.long)
     torch.manual_seed(0)
@@ -42,8 +43,9 @@ if __name__ == '__main__':
     encoded_sentence = encoder(ids)
     bow_vector = BOW_vector(input_sentence, vocab)
     bow_tensor = torch.tensor(bow_vector, dtype = torch.float32)
-    bow_tensor = bow_tensor @ encoder.embedding.weight
-    print(torch.allclose(encoded_sentence, bow_tensor))
+    mean_bow_tensor = bow_tensor/input_length
+    final_bow_tensor = (mean_bow_tensor) @ encoder.embedding.weight
+    print(torch.allclose(encoded_sentence, final_bow_tensor))
     print(encoded_sentence.shape)
     print(encoded_sentence.requires_grad)
     print(encoded_sentence.grad_fn)
